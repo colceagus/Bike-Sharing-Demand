@@ -14,17 +14,20 @@ def getHourOfWeek(date):
     hourOfWeek += int(date.strftime("%H"))
     return int(hourOfWeek)
 
-def readDataset():
-    global dataset, data
+def readDataset(filename):
+    dataset = []
     print "Loading DataSet...",
     headers = ["Date", "Season", "Holiday", "WorkingDay", "Weather", "Temp", "aTemp", "Humidity", "Windspeed", "Casual",
                "Registered", "Count"]
     datefunc = lambda x: parser.parse(x)
     dtype = [("Date", 'object')] + [(header, 'd') for header in headers[1:]]
-    dataset = np.genfromtxt('train.csv', delimiter=',', skip_header=1, names=headers, dtype=dtype,
+    dataset = np.genfromtxt(filename, delimiter=',', skip_header=1, names=headers, dtype=dtype,
                             converters={"Date": datefunc})
     print "Done. "
+    return dataset
 
+
+def formatData(dataset):
     data = {}
     for d in dataset:
         season = int(d[1])
@@ -51,7 +54,9 @@ def readDataset():
         print "{}: {}".format(key, data[key])
 
 def main():
-    readDataset()
+    global dataset, data
+    dataset = readDataset('train.csv')
+    data = formatData(dataset)
 
 
 if __name__ == "__main__":

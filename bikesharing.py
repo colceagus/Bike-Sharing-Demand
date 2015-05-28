@@ -2,12 +2,15 @@ __author__ = 'danielcolceag'
 
 import numpy as np
 from dateutil import parser
-import operator
 import csv
+import random
 
 dataset = []
 data = {}
+testdataset = {}
+testdata = {}
 
+maxCount = 0
 
 def getHourOfWeek(date):
     hourOfWeek = 0
@@ -35,6 +38,7 @@ def readDataset(filename):
 
 
 def formatData(dataset, type='train', debug=False):
+    global maxCount
     data = {}
     for d in dataset:
         season = int(d[1])
@@ -60,6 +64,9 @@ def formatData(dataset, type='train', debug=False):
             TODO: Test if repacking of the date is the original
         '''
         data[season, year, hourOfWeek, weekNumber, weather] = (count, d[0])
+
+        if count > maxCount:
+            maxCount = count
         #data[season][year][hourOfWeek][weekNumber][weather] = count
 
     if debug == True:
@@ -95,22 +102,69 @@ def compute(d):
         if iter_season == season and iter_year <= year and iter_hour == hour and iter_weekNumber <= weekNumber:
             keys.append(key)
 
-    # filtering phase 2
-    if len(keys) < 3:
-       pass
+    # interpolation of data
+    if len(keys) < 2:
+        # make an average between the next week, same hour and previous week, same hourfor key in sorted(data.iterkeys()):
+        prevkeys = []
+        nextkeys = []
 
-    # filtering phase 3
-    if len(keys) < 3:
-        pass
+        # for key in sorted(data.iterkeys()):
+        #    (iter_season, iter_year, iter_hour, iter_weekNumber, iter_weather) = key
 
-    predictedValue = 0
+        #    if iter_season == season and iter_year == year and iter_weekNumber == weekNumber:
+
+        for i in range(5):
+            # check if previous 5 weeks have data for the same hour, no matter the weather
+            # if we have more than 2 previous keys and 2 future keys with the same weather
+            # as the weather we compute for, we pick those and average them to get the predicted value
+
+            weather0 = (season, year, hour, weekNumber - i, 0)
+            weather1 = (season, year, hour, weekNumber - i, 1)
+            weather2 = (season, year, hour, weekNumber - i, 2)
+            weather3 = (season, year, hour, weekNumber - i, 3)
+            if weather0 in data:
+                prevkeys.append(weather0)
+            if weather1 in data:
+                prevkeys.append(weather1)
+            if weather2 in data:
+                prevkeys.append(weather2)
+            if weather3 in data:
+                prevkeys.append(weather3)
+
+            weather0 = (season,  year,  hour,  weekNumber + i, 0)
+            weather1 = (season,  year,  hour,  weekNumber + i, 1)
+            weather2 = (season,  year,  hour,  weekNumber + i, 2)
+            weather3 = (season,  year,  hour,  weekNumber + i, 3)
+            if weather0 in data:
+                nextkeys.append(weather0)
+            if weather1 in data:
+                nextkeys.append(weather1)
+            if weather2 in data:
+                nextkeys.append(weather2)
+            if weather3 in data:
+                nextkeys.append(weather3)
+        prevvalues = [data[key][0] for key in prevkeys]
+        nextvalues = [data[key][0] for key in nextkeys]
+        minlen = min(len(prevvalues), len(nextvalues))
+        weights = [(1 - (round((x * (1.0/minlen)), 2))) for x in range(minlen)]
+        prevsum = round(sum([weights[i] * prevvalues[i] for i in range(minlen)]),2)
+        nextsum = round(sum([weights[i] * nextvalues[i] for i in range(minlen)]),2)
+        predictedValue = 0
+        if prevsum < nextsum:
+            predictedValue = round(((prevsum * 0.5 + nextsum) / 1.5), 2)
+        else:
+            predictedValue = round(((prevsum + nextsum * 0.5) / 1.5), 2)
+
+        if predictedValue > 0:
+            return predictedValue
+
     if len(keys) != 0:
         #print keys
         #print len(keys),
         #print " values found.",
         values = [data[key][0] for key in sorted(keys)]
         #print values
-        weights = [(1 - (round((x * (1.0/len(keys))),2))) for x in range(len(keys))]
+        weights = [(1 - (round((x * (1.0/len(keys))), 2))) for x in range(len(keys))]
         #print weights
         computed = [weights[i] * values[i] for i in range(len(keys))]
         # print computed
@@ -120,6 +174,16 @@ def compute(d):
         #print "Estimated Value is: ",
         #print predictedValue
     return round(predictedValue, 2)
+
+
+def writeDataset(dataset):
+    with open('dataset.csv', 'wb') as csvfile:
+        fieldNames = ['datetime', 'count']
+        writer = csv.writer(csvfile, delimiter=',')
+        writer.writerow(fieldNames)
+        for key, dictkey in enumerate(dataset):
+            writer.writerow([dictkey[0].strftime('%Y-%m-%d %H:%M:%S'), dictkey[1]])
+
 
 def writeResults(dataset):
 
@@ -131,10 +195,11 @@ def writeResults(dataset):
             writer.writerow([dictkey[1][1].strftime('%Y-%m-%d %H:%M:%S'), dictkey[1][0]])
 
 def main():
-    global dataset, data
+    global dataset, data, testdataset, testdata
     dataset = readDataset('train')
     data = formatData(dataset, 'train')
-
+    sortedData = sorted(data.items(), key=lambda x: x[0])
+    writeResults(sortedData)
     testdataset = readDataset('test')
     testdata = formatData(testdataset, 'test')
 
@@ -147,6 +212,7 @@ def main():
 
     print "Writing Results to CSV file...",
     sortedResults = sorted(testdata.items(), key=lambda x: x[1][1])
+
     writeResults(sortedResults)
     print "Done."
 

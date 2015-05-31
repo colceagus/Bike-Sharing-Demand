@@ -3,6 +3,8 @@ __author__ = 'danielcolceag'
 import numpy as np
 from dateutil import parser
 import csv
+import datetime
+from collections import OrderedDict
 import random
 
 dataset = []
@@ -12,12 +14,6 @@ testdata = {}
 
 maxCount = 0
 
-def getHourOfWeek(date):
-    hourOfWeek = 0
-    for day in range(int(date.strftime("%u"))-1):
-        hourOfWeek += 24
-    hourOfWeek += int(date.strftime("%H"))
-    return int(hourOfWeek)
 
 def readDataset(filename):
     dataset = []
@@ -34,8 +30,32 @@ def readDataset(filename):
     dataset = np.genfromtxt((filename + '.csv'), delimiter=',', skip_header=1, names=headers, dtype=dtype,
                             converters={"Date": datefunc})
     print "Done. "
-    return dataset
+    return sorted(dataset, key=lambda x: x[0])
 
+
+def getHourOfWeek(date):
+    hourOfWeek = 0
+    # day of week number
+    dayNumber = int(date.strftime("%u")) - 1
+    dayRange = range(dayNumber)
+    for day in dayRange:
+        hourOfWeek += 24
+    hourOfWeek += int(date.strftime("%H"))
+    return int(hourOfWeek)
+
+
+def recoverDate(orig_date, year, hourOfWeek, weekNumber):
+    # recover date
+
+    # day of week : 0 - 6
+    dayofweek = int(orig_date.strftime("%u")) - 1
+    # if the first week (00) starts on another day than Monday, remove the hour difference from the previous days in the
+    # week
+    day = int((hourOfWeek - (dayofweek - 1) * 24) / 24)
+    hour = hourOfWeek % 24
+    month = weekNumber / 12 + 1
+
+    return datetime.datetime(year, month, day, hour, 0, 0)
 
 def formatData(dataset, type='train', debug=False):
     global maxCount
@@ -55,14 +75,18 @@ def formatData(dataset, type='train', debug=False):
 
            *** %u - weekday as a number (1 to 7), Monday=1. Warning: In Sun Solaris Sunday=1
         '''
+
         weekNumber = int(d[0].strftime("%W"))
         hourOfWeek = getHourOfWeek(d[0])
         weather = int(d[4])
         count = 0 if (type == 'test') else int(d[11])
 
-        '''
-            TODO: Test if repacking of the date is the original
-        '''
+
+        # print recoverDate(d[0], year, hourOfWeek, weekNumber)
+        #datestring = date.strftime('yyyyMMdd HH:mm:ss')
+        #recoveredDate = parser.parse(datestring)
+        #print "date: {} - recoveredDate: {}".format(d[0],recoveredDate)
+
         data[season, year, hourOfWeek, weekNumber, weather] = (count, d[0])
 
         if count > maxCount:
@@ -90,18 +114,32 @@ def compute(d):
     # step 1, first breakdown by hour
     # take all days in history and compute the average
     (season, year, hour, weekNumber, weather) = d
-    #print "Compute data for ",
-    #print season, year, hour, weekNumber, weather,
-    #print ". ",
     # iterate through dataset and get the count for same hour, no matter what year, weekNumber and weather
 
     # filtering phase 1
     keys = []
     for key in sorted(data.iterkeys()):
         (iter_season, iter_year, iter_hour, iter_weekNumber, iter_weather) = key
-        if iter_season == season and iter_year <= year and iter_hour == hour and iter_weekNumber <= weekNumber:
-            keys.append(key)
+        # date din acelasi sezon, indiferent de an, aceeasi ora, indiferent de numarul saptamanii
+        if iter_year <= year:
+            if iter_season == season:
+                if iter_hour == hour:
+                    # take in account the last 4-5 weeks
+                    if iter_weekNumber <= weekNumber:
+                        keys.append(key)
 
+    # no data in the same season, previous years => check for data in the previous season, same year or previous year
+    for key in sorted(data.iterkeys()):
+        # date din sezoanele precedente, anul curent
+        (iter_season, iter_year, iter_hour, iter_weekNumber, iter_weather) = key
+        if iter_year <= year:
+                if iter_hour == hour:
+                    keys.append(key)
+    '''
+    if iter_season == season and iter_year <= year and iter_hour == hour and iter_weekNumber <= weekNumber:
+        keys.append(key)
+    '''
+    """
     # interpolation of data
     if len(keys) < 2:
         # make an average between the next week, same hour and previous week, same hourfor key in sorted(data.iterkeys()):
@@ -157,8 +195,9 @@ def compute(d):
 
         if predictedValue > 0:
             return predictedValue
-
-    if len(keys) != 0:
+    """
+    predictedValue = 0
+    if len(keys) >= 1:
         #print keys
         #print len(keys),
         #print " values found.",
@@ -204,10 +243,11 @@ def main():
     testdata = formatData(testdataset, 'test')
 
     sortedTestKeys = sorted(testdata.iterkeys())
-
+    sortedTestData = sorted(testdata.iteritems(), key=lambda x: x[1])
     print "Computing Results...",
-    for i in range(len(sortedTestKeys)):
-        testdata[sortedTestKeys[i]] = (compute(sortedTestKeys[i]), testdata[sortedTestKeys[i]][1])
+    for d in sortedTestData:
+        testdata[d[0]] = (compute(d[0]), d[1][1])
+        data[d[0]] = testdata[d[0]]
     print "Done."
 
     print "Writing Results to CSV file...",

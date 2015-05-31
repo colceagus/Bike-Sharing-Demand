@@ -91,6 +91,8 @@ def formatData(dataset, type='train', debug=False):
         # print "date: {} - recoveredDate: {}".format(d[0],recoveredDate)
 
         data[season, year, hourOfWeek, weekNumber, weather] = (count, d[0])
+
+        # Reformat Data Returned into OrderedDict
         if season not in data2:
             data2[season] = OrderedDict()
         if year not in data2[season]:
@@ -106,12 +108,11 @@ def formatData(dataset, type='train', debug=False):
 
         if count > maxCount:
             maxCount = count
-            # data[season][year][hourOfWeek][weekNumber][weather] = count
 
-    if debug == True:
+    if debug is True:
         for key in sorted(data.iterkeys()):
             print "{}: {}".format(key, data[key])
-    print data2
+
     return data
 
 

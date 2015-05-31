@@ -57,9 +57,12 @@ def recoverDate(orig_date, year, hourOfWeek, weekNumber):
 
     return datetime.datetime(year, month, day, hour, 0, 0)
 
+
 def formatData(dataset, type='train', debug=False):
     global maxCount
     data = {}
+    data2 = OrderedDict()
+
     for d in dataset:
         season = int(d[1])
         year = int(d[0].strftime("%Y"))
@@ -83,25 +86,33 @@ def formatData(dataset, type='train', debug=False):
 
 
         # print recoverDate(d[0], year, hourOfWeek, weekNumber)
-        #datestring = date.strftime('yyyyMMdd HH:mm:ss')
-        #recoveredDate = parser.parse(datestring)
-        #print "date: {} - recoveredDate: {}".format(d[0],recoveredDate)
+        # datestring = date.strftime('yyyyMMdd HH:mm:ss')
+        # recoveredDate = parser.parse(datestring)
+        # print "date: {} - recoveredDate: {}".format(d[0],recoveredDate)
 
         data[season, year, hourOfWeek, weekNumber, weather] = (count, d[0])
+        if season not in data2:
+            data2[season] = OrderedDict()
+        if year not in data2[season]:
+            data2[season][year] = OrderedDict()
+        if hourOfWeek not in data2[season][year]:
+            data2[season][year][hourOfWeek] = OrderedDict()
+        if weekNumber not in data2[season][year][hourOfWeek]:
+            data2[season][year][hourOfWeek][weekNumber] = OrderedDict()
+        if weather not in data2[season][year][hourOfWeek][weekNumber]:
+            data2[season][year][hourOfWeek][weekNumber][weather] = OrderedDict()
+
+        data2[season][year][hourOfWeek][weekNumber][weather] = count
 
         if count > maxCount:
             maxCount = count
-        #data[season][year][hourOfWeek][weekNumber][weather] = count
+            # data[season][year][hourOfWeek][weekNumber][weather] = count
 
     if debug == True:
         for key in sorted(data.iterkeys()):
             print "{}: {}".format(key, data[key])
-
+    print data2
     return data
-
-
-def regenerateDate(key):
-    pass
 
 
 def compute(d):
@@ -112,10 +123,8 @@ def compute(d):
     :return: count - number of bikes for key
     """
     # step 1, first breakdown by hour
-    # take all days in history and compute the average
     (season, year, hour, weekNumber, weather) = d
     # iterate through dataset and get the count for same hour, no matter what year, weekNumber and weather
-
     # filtering phase 1
     keys = []
     for key in sorted(data.iterkeys()):
@@ -127,14 +136,15 @@ def compute(d):
                     # take in account the last 4-5 weeks
                     if iter_weekNumber <= weekNumber:
                         keys.append(key)
-
-    # no data in the same season, previous years => check for data in the previous season, same year or previous year
-    for key in sorted(data.iterkeys()):
-        # date din sezoanele precedente, anul curent
-        (iter_season, iter_year, iter_hour, iter_weekNumber, iter_weather) = key
-        if iter_year <= year:
+    if len(keys) <= 2:
+        # no data in the same season, previous years => check for data in the previous season, same year or previous year
+        for key in sorted(data.iterkeys()):
+            # date din sezoanele precedente, anul curent
+            (iter_season, iter_year, iter_hour, iter_weekNumber, iter_weather) = key
+            if iter_year <= year:
                 if iter_hour == hour:
-                    keys.append(key)
+                    if iter_weekNumber < weekNumber:
+                        keys.append(key)
     '''
     if iter_season == season and iter_year <= year and iter_hour == hour and iter_weekNumber <= weekNumber:
         keys.append(key)
@@ -198,20 +208,20 @@ def compute(d):
     """
     predictedValue = 0
     if len(keys) >= 1:
-        #print keys
-        #print len(keys),
-        #print " values found.",
+        # print keys
+        # print len(keys),
+        # print " values found.",
         values = [data[key][0] for key in sorted(keys)]
-        #print values
-        weights = [(1 - (round((x * (1.0/len(keys))), 2))) for x in range(len(keys))]
-        #print weights
+        # print values
+        weights = [(1 - (round((x * (1.0 / len(keys))), 2))) for x in range(len(keys))]
+        # print weights
         computed = [weights[i] * values[i] for i in range(len(keys))]
         # print computed
-        #print sum(computed)
-        #print sum(weights)
+        # print sum(computed)
+        # print sum(weights)
         predictedValue = sum(computed) / sum(weights)
-        #print "Estimated Value is: ",
-        #print predictedValue
+        # print "Estimated Value is: ",
+        # print predictedValue
     return round(predictedValue, 2)
 
 
@@ -225,13 +235,13 @@ def writeDataset(dataset):
 
 
 def writeResults(dataset):
-
     with open('submission.csv', 'wb') as csvfile:
         fieldNames = ['datetime', 'count']
         writer = csv.writer(csvfile, delimiter=',')
         writer.writerow(fieldNames)
         for key, dictkey in enumerate(dataset):
             writer.writerow([dictkey[1][1].strftime('%Y-%m-%d %H:%M:%S'), dictkey[1][0]])
+
 
 def main():
     global dataset, data, testdataset, testdata
@@ -255,6 +265,7 @@ def main():
 
     writeResults(sortedResults)
     print "Done."
+
 
 if __name__ == "__main__":
     main()
